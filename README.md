@@ -469,7 +469,7 @@ Los datos de prueba de los casos de uso 1-5 del PDF están precargados en `BaseD
 
 Este proyecto fue desarrollado como prueba técnica para Laft Technologies.
 
-**Autor**: [Tu Nombre]  
-**Fecha**: Diciembre 2024  
+**Autor**: Luis Arcángel Farro Terán  
+**Fecha**: Diciembre 2025  
 **Nivel**: Senior
 
