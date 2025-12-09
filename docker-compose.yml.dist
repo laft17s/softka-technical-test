@@ -1,0 +1,196 @@
+version: '3.8'
+
+services:
+  # =====================================================
+  # PostgreSQL Database
+  # =====================================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: laft-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: change_me
+      POSTGRES_DB: laft_bank
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./BaseDatos.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - laft-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # =====================================================
+  # pgAdmin (Opcional - para administración de BD)
+  # =====================================================
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: laft-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@example.com
+      PGADMIN_DEFAULT_PASSWORD: change_me
+    ports:
+      - "5050:80"
+    networks:
+      - laft-network
+    volumes:
+      - ./docker/pgadmin/servers.json:/pgadmin4/servers.json
+    depends_on:
+      - postgres
+
+  # =====================================================
+  # Zookeeper (requerido para Kafka)
+  # =====================================================
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: laft-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    networks:
+      - laft-network
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # =====================================================
+  # Kafka
+  # =====================================================
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: laft-kafka
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    ports:
+      - "9094:9092"
+      - "9093:9093"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    networks:
+      - laft-network
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+
+  # =====================================================
+  # Kafka UI (Opcional - para visualizar topics)
+  # =====================================================
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: laft-kafka-ui
+    depends_on:
+      - kafka
+    ports:
+      - "8090:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: laft-cluster
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+    networks:
+      - laft-network
+
+  # =====================================================
+  # Client Service (Microservicio 1)
+  # =====================================================
+  client-service:
+    build:
+      context: .
+      dockerfile: client-service/Dockerfile
+    container_name: laft-client-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    ports:
+      - "8081:8081"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/laft_bank
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: change_me
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    networks:
+      - laft-network
+    restart: unless-stopped
+
+  # =====================================================
+  # Account Service (Microservicio 2)
+  # =====================================================
+  account-service:
+    build:
+      context: .
+      dockerfile: account-service/Dockerfile
+    container_name: laft-account-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    ports:
+      - "8082:8082"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/laft_bank
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: change_me
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    networks:
+      - laft-network
+    restart: unless-stopped
+
+  # =====================================================
+  # Bank Management Composite Service
+  # =====================================================
+  bank-mgnt-composite:
+    build:
+      context: .
+      dockerfile: bank-mgnt-composite/Dockerfile
+    container_name: laft-bank-mgnt-composite
+    depends_on:
+      - client-service
+      - account-service
+    ports:
+      - "8083:8083"
+    environment:
+      SERVER_PORT: 8083
+      SPRING_APPLICATION_NAME: bank-mgnt-composite
+      SPRING_GRAPHQL_GRAPHIQL_ENABLED: "true"
+      SPRING_GRAPHQL_GRAPHIQL_PATH: /graphiql
+      SERVICES_CLIENT_SERVICE_URL: http://client-service:8081
+      SERVICES_ACCOUNT_SERVICE_URL: http://account-service:8082
+    networks:
+      - laft-network
+    restart: unless-stopped
+
+# =====================================================
+# Networks
+# =====================================================
+networks:
+  laft-network:
+    driver: bridge
+
+# =====================================================
+# Volumes
+# =====================================================
+volumes:
+  postgres_data:
+    driver: local

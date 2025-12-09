@@ -1,0 +1,83 @@
+# Gradle
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+# IDE
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Eclipse
+.classpath
+.project
+.settings/
+bin/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Logs
+*.log
+logs/
+
+# Spring Boot
+application-local.yml
+application-local.properties
+application.yml
+application.properties
+!application.yml.dist
+!application.properties.dist
+
+# Database
+*.db
+*.sqlite
+
+# Docker
+.env
+
+# Python (para scripts de utilidad)
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+
+# Otros
+*.class
+*.jar
+!gradle-wrapper.jar
+*.war
+*.ear
+*.zip
+*.tar.gz
+*.rar
+
+# Docker
+docker-compose.yml
+
+# Automations
+final-final-fix.sh
+clean.sh
+final-fix.sh
+fix-all-translations.sh
+refactor-to-english.sh
+rename-files.sh
+translate-variables.sh
+
+# Instructions
+instructions
+
+
+
